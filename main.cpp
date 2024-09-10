@@ -1,26 +1,28 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <HardwareSerial.h>  // Agrega esta línea para el ESP32
+#include <HardwareSerial.h>
 
 // Configuración de la pantalla LCD con la dirección I2C 0x27, 20 columnas y 4 filas
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 #define Pot1 33
 #define Pot2 32
-#define bot1 34
-#define bot2 35
+#define bot1 16
+#define bot2 17
 
 uint8_t decenas, unidades, decimal, decenas1, unidades1, decimal1;
 float voltaje, voltaje2;
 unsigned long counter = 0;
-unsigned long lastButtonUpState = LOW;
-unsigned long lastButtonDownState = LOW;
+bool lastButtonUpState = LOW;
+bool lastButtonDownState = LOW;
+unsigned long lastDebounceTime = 0; 
+unsigned long debounceDelay = 50; // Retardo para eliminar rebotes de 50ms
 
 void setup()
 {
-    // Configuración de los pines de los botones
-    pinMode(bot1, INPUT);
-    pinMode(bot2, INPUT);
+    // Configuración de los pines de los botones con resistencias pull-up internas
+    pinMode(bot1, INPUT_PULLUP);
+    pinMode(bot2, INPUT_PULLUP);
     
     // Inicialización del monitor serie
     Serial.begin(115200);
@@ -30,8 +32,7 @@ void setup()
     lcd.backlight();
     
     lcd.clear();
-    lcd.print("hello world!");  // Mensaje inicial en la pantalla LCD
-
+    lcd.print("Iniciando... ");  // Mensaje inicial en la pantalla LCD
     delay(3000);
     lcd.clear();
 }
@@ -48,22 +49,12 @@ void loop()
     decimal = temp;
 
     // Mostrar el primer voltaje en la LCD
-    Serial.print(voltaje);
-    Serial.print("\t");
-    Serial.print(decenas);
-    Serial.print("\t");
-    Serial.print(unidades);
-    Serial.print("\t");
-    Serial.print(decimal);
-
     lcd.setCursor(0, 0);
     lcd.print("V1:");
     lcd.print(decenas);
     lcd.print('.');
     lcd.print(unidades);
     lcd.print(decimal);
-
-    delay(250);
 
     // Lectura del segundo potenciómetro
     voltaje2 = analogReadMilliVolts(Pot2) / 10.0;
@@ -75,15 +66,6 @@ void loop()
     decimal1 = temp2;
 
     // Mostrar el segundo voltaje en la LCD
-    Serial.print("\t");
-    Serial.print(voltaje2);
-    Serial.print("\t");
-    Serial.print(decenas1);
-    Serial.print("\t");
-    Serial.print(unidades1);
-    Serial.print("\t");
-    Serial.print(decimal1);
-
     lcd.setCursor(8, 0); // Ajusta la posición del segundo voltaje
     lcd.print("V2:");
     lcd.print(decenas1);
@@ -91,33 +73,35 @@ void loop()
     lcd.print(unidades1);
     lcd.print(decimal1);
 
-    delay(250);
-
     // Lectura del estado de los botones
-    int buttonUpState = digitalRead(bot1);
-    int buttonDownState = digitalRead(bot2);
+    bool buttonUpState = digitalRead(bot1);
+    bool buttonDownState = digitalRead(bot2);
 
-    // Mostrar el contador en la LCD
-    lcd.setCursor(0, 1);
-    lcd.print("Contador: ");
+    // Eliminación del rebote
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        // Incrementar el contador
+        if (buttonUpState == LOW && lastButtonUpState == HIGH) {
+            counter++;
+            lcd.setCursor(0, 1);
+            lcd.print("Contador: ");
+            lcd.print(counter);
+        }
 
-    // Incrementar el contador
-    if (buttonUpState == HIGH && lastButtonUpState == LOW) {
-        counter++;
-        lcd.setCursor(10, 1);
-        lcd.print(counter);
-    }
+        // Decrementar el contador
+        if (buttonDownState == LOW && lastButtonDownState == HIGH) {
+            counter--;
+            lcd.setCursor(0, 1);
+            lcd.print("Contador: ");
+            lcd.print(counter);
+        }
 
-    // Decrementar el contador
-    if (buttonDownState == HIGH && lastButtonDownState == LOW) {
-        counter--;
-        lcd.setCursor(10, 1);
-        lcd.print(counter);
+        // Actualizar el tiempo de rebote
+        lastDebounceTime = millis();
     }
 
     // Actualizar el estado de los botones
     lastButtonUpState = buttonUpState;
     lastButtonDownState = buttonDownState;
 
-    delay(400);
+    delay(100); // Pequeño retraso para evitar saturación
 }
